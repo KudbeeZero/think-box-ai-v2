@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Manager Tests</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      color: var(--text-primary);
+    }
+    .test-section {
+      margin-bottom: 30px;
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      border-radius: 6px;
+      background: var(--bg-panel);
+    }
+    .test-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: var(--accent);
+    }
+    .test-result {
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+      border-left: 3px solid;
+    }
+    .test-pass {
+      background: rgba(16, 185, 129, 0.1);
+      border-left-color: var(--success);
+      color: var(--success);
+    }
+    .test-fail {
+      background: rgba(239, 68, 68, 0.1);
+      border-left-color: var(--error);
+      color: var(--error);
+    }
+    .test-info {
+      background: rgba(59, 130, 246, 0.1);
+      border-left-color: var(--info);
+      color: var(--info);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 16px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: var(--accent-light);
+    }
+  </style>
+</head>
+<body style="background: var(--bg-primary);">
+  <div class="test-container">
+    <h1>Profile Manager Tests</h1>
+
+    <div class="controls">
+      <button onclick="runAllTests()">Run All Tests</button>
+      <button onclick="clearResults()">Clear Results</button>
+      <button onclick="clearStorage()">Clear Storage</button>
+    </div>
+
+    <div class="test-section">
+      <div class="test-title">Test Results</div>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <!-- Load the profile manager module -->
+  <script src="/js/profile-manager.js"></script>
+
+  <script>
+    const results = document.getElementById('results');
+
+    function addResult(name, passed, message) {
+      const div = document.createElement('div');
+      div.className = `test-result ${passed ? 'test-pass' : 'test-fail'}`;
+      div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+      results.appendChild(div);
+    }
+
+    function log(message) {
+      const div = document.createElement('div');
+      div.className = 'test-result test-info';
+      div.textContent = `ℹ ${message}`;
+      results.appendChild(div);
+    }
+
+    function clearResults() {
+      results.innerHTML = '';
+    }
+
+    function clearStorage() {
+      localStorage.clear();
+      log('Local storage cleared');
+    }
+
+    async function runAllTests() {
+      clearResults();
+      log('Starting profile tests...');
+
+      // Test 1: Default profile creation
+      try {
+        localStorage.clear();
+        const manager = new ProfileManager();
+        const profiles = manager.getAllProfiles();
+        addResult('Default Profile Creation', profiles.length === 1 && profiles[0].name === 'Main', 'Default "Main" profile created');
+      } catch (e) {
+        addResult('Default Profile Creation', false, e.message);
+      }
+
+      // Test 2: Create new profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profile = manager.createProfile('Alpha');
+        addResult('Create Profile', profile && profile.name === 'Alpha', 'Profile "Alpha" created');
+      } catch (e) {
+        addResult('Create Profile', false, e.message);
+      }
+
+      // Test 3: Switch profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+        const beta = manager.createProfile('Beta');
+        manager.switchProfile(beta.id);
+        const active = manager.getActiveProfile();
+        addResult('Switch Profile', active.id === beta.id, 'Switched to profile "Beta"');
+      } catch (e) {
+        addResult('Switch Profile', false, e.message);
+      }
+
+      // Test 4: Rename profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+        const profile = profiles[0];
+        manager.renameProfile(profile.id, 'Renamed');
+        const renamed = manager.profiles.get(profile.id);
+        addResult('Rename Profile', renamed.name === 'Renamed', 'Profile renamed successfully');
+      } catch (e) {
+        addResult('Rename Profile', false, e.message);
+      }
+
+      // Test 5: Memory isolation - save and load
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+
+        // Switch to first profile and save memory
+        manager.switchProfile(profiles[0].id);
+        const memory1 = { org: { key1: 'value1' }, verified: { vkey1: 'vvalue1' } };
+        manager.saveMemoryForActiveProfile(memory1);
+
+        // Switch to second profile and save different memory
+        manager.switchProfile(profiles[1].id);
+        const memory2 = { org: { key2: 'value2' }, verified: { vkey2: 'vvalue2' } };
+        manager.saveMemoryForActiveProfile(memory2);
+
+        // Switch back to first and verify memory
+        manager.switchProfile(profiles[0].id);
+        const loaded1 = manager.loadMemoryForActiveProfile();
+        const isolated = loaded1.org.key1 === 'value1' && !loaded1.org.key2;
+
+        addResult('Memory Isolation', isolated, 'Memory isolated between profiles');
+      } catch (e) {
+        addResult('Memory Isolation', false, e.message);
+      }
+
+      // Test 6: Add runs to profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const activeProfile = manager.getActiveProfile();
+        manager.addRunToActiveProfile('run-1');
+        manager.addRunToActiveProfile('run-2');
+        const runs = manager.getActiveProfileRuns();
+        addResult('Add Runs', runs.length === 2 && runs.includes('run-1'), 'Runs added to profile');
+      } catch (e) {
+        addResult('Add Runs', false, e.message);
+      }
+
+      // Test 7: Export profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+        const exportData = manager.exportProfile(profiles[0].id);
+        const hasProfileData = exportData.profile && exportData.profile.id;
+        const hasMemory = exportData.memory && typeof exportData.memory === 'object';
+        const hasRuns = Array.isArray(exportData.runs);
+        addResult('Export Profile', hasProfileData && hasMemory && hasRuns, 'Profile exported with data');
+      } catch (e) {
+        addResult('Export Profile', false, e.message);
+      }
+
+      // Test 8: Import profile
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+        const exportData = manager.exportProfile(profiles[0].id);
+
+        const imported = manager.importProfile(exportData);
+        const exists = manager.profiles.has(imported.id);
+        const hasNewId = imported.id !== exportData.profile.id;
+
+        addResult('Import Profile', exists && hasNewId, 'Profile imported with new ID');
+      } catch (e) {
+        addResult('Import Profile', false, e.message);
+      }
+
+      // Test 9: Delete profile (cannot delete if only one)
+      try {
+        const manager = window.ProfileManagerInstance;
+        const profiles = manager.getAllProfiles();
+
+        if (profiles.length > 1) {
+          const deleted = manager.deleteProfile(profiles[0].id);
+          const notExists = !manager.profiles.has(profiles[0].id);
+          addResult('Delete Profile', deleted && notExists, 'Profile deleted successfully');
+        } else {
+          addResult('Delete Profile', false, 'Need multiple profiles to test delete');
+        }
+      } catch (e) {
+        addResult('Delete Profile', false, e.message);
+      }
+
+      // Test 10: Cannot delete last profile
+      try {
+        localStorage.clear();
+        const manager = new ProfileManager();
+        const profiles = manager.getAllProfiles();
+        const deleted = manager.deleteProfile(profiles[0].id);
+        addResult('Cannot Delete Last Profile', !deleted, 'Cannot delete the only profile');
+      } catch (e) {
+        addResult('Cannot Delete Last Profile', false, e.message);
+      }
+
+      // Test 11: Profile persistence
+      try {
+        localStorage.clear();
+        const manager1 = new ProfileManager();
+        const profile = manager1.createProfile('Persistent');
+        manager1.saveMemoryForActiveProfile({ org: { test: 'data' } });
+
+        // Create new instance to verify persistence
+        const manager2 = new ProfileManager();
+        const profiles = manager2.getAllProfiles();
+        const found = profiles.some(p => p.name === 'Persistent');
+        addResult('Profile Persistence', found, 'Profiles persisted to localStorage');
+      } catch (e) {
+        addResult('Profile Persistence', false, e.message);
+      }
+
+      // Test 12: Event emission on profile change
+      try {
+        const manager = window.ProfileManagerInstance;
+        let eventFired = false;
+
+        document.addEventListener('profile:changed', () => {
+          eventFired = true;
+        });
+
+        manager.createProfile('EventTest');
+
+        setTimeout(() => {
+          addResult('Profile Event Emission', eventFired, 'profile:changed event emitted');
+        }, 100);
+      } catch (e) {
+        addResult('Profile Event Emission', false, e.message);
+      }
+
+      log('Tests complete!');
+    }
+  </script>
+</body>
+</html>

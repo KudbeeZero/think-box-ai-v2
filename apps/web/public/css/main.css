@@ -599,3 +599,139 @@ body {
     max-height: 200px;
   }
 }
+
+/* Profile Switcher */
+.profile-switcher-container {
+  position: relative;
+}
+
+.profile-switcher {
+  position: relative;
+}
+
+.profile-button {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.profile-button #profile-name {
+  font-weight: 600;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin-top: 8px;
+  min-width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.profile-dropdown.hidden {
+  display: none;
+}
+
+.profile-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.profile-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.2s;
+}
+
+.profile-item:last-child {
+  border-bottom: none;
+}
+
+.profile-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.profile-item.active {
+  background: rgba(124, 58, 237, 0.1);
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+
+.profile-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.profile-select-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px;
+  border-radius: 2px;
+}
+
+.profile-select-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.profile-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.profile-item-action {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+
+.profile-item-action:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.profile-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-left: 4px;
+}
+
+.profile-actions {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.profile-action-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.profile-action-btn:hover {
+  background: var(--accent-light);
+}
