@@ -31,6 +31,7 @@
           <span id="status-dot" class="status-dot idle"></span>
           <span id="status-text">Idle</span>
         </div>
+        <button id="actions-button" class="btn-secondary" title="Run workflows and quick actions" disabled>⚡ Actions</button>
         <button id="clear-chat" class="btn-secondary">Clear</button>
       </div>
     </header>
@@ -55,6 +56,34 @@
           </div>
           <div id="plugin-list" class="plugin-list">
             <!-- Plugins injected here -->
+          </div>
+        </div>
+
+        <div class="panel" id="workflow-builder-panel">
+          <div class="panel-header">
+            <h3>⚙️ Workflow Builder</h3>
+          </div>
+          <div class="workflow-builder">
+            <div class="workflow-field">
+              <label for="workflow-name">Name:</label>
+              <input type="text" id="workflow-name" placeholder="Untitled Workflow" class="workflow-input">
+            </div>
+            <div class="workflow-field">
+              <label for="workflow-description">Description:</label>
+              <textarea id="workflow-description" placeholder="Optional description" class="workflow-input"></textarea>
+            </div>
+            <div class="workflow-steps-header">
+              <label>Steps:</label>
+              <button id="workflow-add-step" class="btn-icon" title="Add step">+</button>
+            </div>
+            <div id="workflow-steps" class="workflow-steps">
+              <div class="empty-state">No steps yet. Add a step to get started.</div>
+            </div>
+            <div class="workflow-actions">
+              <button id="workflow-save" class="btn-primary">💾 Save</button>
+              <button id="workflow-load" class="btn-secondary">📂 Load</button>
+              <button id="workflow-clear" class="btn-secondary">🗑️ Clear</button>
+            </div>
           </div>
         </div>
       </aside>
@@ -114,5 +143,7 @@
   </div>
 
   <script src="/js/app.js"></script>
+  <script src="/js/workflow-builder.js"></script>
+  <script src="/js/actions-button.js"></script>
 </body>
 </html>
