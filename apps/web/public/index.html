@@ -142,8 +142,90 @@
     </main>
   </div>
 
+  <!-- Import services (simulated without TypeScript bundler) -->
+  <script>
+    // Temporary inline import of sharing service
+    // In production, this would be bundled via TypeScript
+    const runSharingService = {
+      exportRun(runId) {
+        const data = localStorage.getItem(`kudbee:run:${runId}`);
+        if (!data) throw new Error(`Run not found: ${runId}`);
+        const runData = JSON.parse(data);
+        return {
+          html: this._generateHtmlExport(runData),
+          markdown: this._generateMarkdownExport(runData),
+          json: this._generateJsonExport(runData),
+        };
+      },
+      createShare(runId, options = {}) {
+        const data = localStorage.getItem(`kudbee:run:${runId}`);
+        if (!data) throw new Error(`Run not found: ${runId}`);
+        const shareId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const now = new Date();
+        let expiresAt;
+        if (options.expiresIn) {
+          expiresAt = new Date(now.getTime() + options.expiresIn).toISOString();
+        }
+        const shareLink = {
+          shareId, runId,
+          url: `${window.location.origin}${window.location.pathname}?share=${shareId}`,
+          createdAt: now.toISOString(),
+          expiresAt,
+          accessCount: 0,
+        };
+        try {
+          let shares = JSON.parse(sessionStorage.getItem('kudbee:shares') || '[]');
+          shares.push(shareLink);
+          sessionStorage.setItem('kudbee:shares', JSON.stringify(shares));
+        } catch (e) {
+          console.warn('Failed to persist share:', e);
+        }
+        return { shareId, url: shareLink.url, expiresAt };
+      },
+      deleteShare(shareId) {
+        try {
+          let shares = JSON.parse(sessionStorage.getItem('kudbee:shares') || '[]');
+          const before = shares.length;
+          shares = shares.filter(s => s.shareId !== shareId);
+          if (shares.length < before) {
+            sessionStorage.setItem('kudbee:shares', JSON.stringify(shares));
+            return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
+      },
+      getSharesForRun(runId) {
+        try {
+          let shares = JSON.parse(sessionStorage.getItem('kudbee:shares') || '[]');
+          shares = shares.filter(s => s.runId === runId && (!s.expiresAt || new Date(s.expiresAt) > new Date()));
+          sessionStorage.setItem('kudbee:shares', JSON.stringify(shares));
+          return shares;
+        } catch (e) {
+          return [];
+        }
+      },
+      _generateHtmlExport(runData) {
+        const timestamp = new Date().toLocaleString();
+        const tasksHtml = (runData.tasks || []).map(t => `<div style="margin: 16px 0; padding: 12px; border-left: 3px solid #7c3aed;">${t.description || 'Task'} (${t.status})</div>`).join('');
+        return `<!DOCTYPE html><html><head><title>Run Export</title></head><body><h1>Run Export</h1><div>Exported: ${timestamp}</div>${tasksHtml}</body></html>`;
+      },
+      _generateMarkdownExport(runData) {
+        const timestamp = new Date().toLocaleString();
+        const tasks = (runData.tasks || []).map(t => `- **${t.description || 'Task'}** (${t.status})`).join('\n');
+        return `# Run Export\n**Exported:** ${timestamp}\n## Tasks\n${tasks}`;
+      },
+      _generateJsonExport(runData) {
+        return JSON.stringify({ id: runData.id, timestamp: new Date().toISOString(), tasks: runData.tasks || [] }, null, 2);
+      },
+    };
+    window.runSharingService = runSharingService;
+  </script>
+
   <script src="/js/profile-manager.js"></script>
   <script src="/js/profile-switcher.js"></script>
+  <script src="/js/sharing-ui.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/workflow-builder.js"></script>
   <script src="/js/actions-button.js"></script>
