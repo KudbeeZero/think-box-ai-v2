@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share Panel Service Tests</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-container {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .test-header {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .test-group {
+      margin-bottom: 20px;
+    }
+    .test-case {
+      margin-bottom: 12px;
+      padding: 12px;
+      border-left: 3px solid #7c3aed;
+      background: #f9f9f9;
+    }
+    .test-case.pass {
+      border-left-color: #10b981;
+      background: #f0fdf4;
+    }
+    .test-case.fail {
+      border-left-color: #ef4444;
+      background: #fef2f2;
+    }
+    .test-name {
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .test-result {
+      font-size: 12px;
+      color: #666;
+    }
+    .test-error {
+      color: #ef4444;
+      font-family: monospace;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      padding: 16px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .summary-card.passed {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .summary-card.failed {
+      background: #fee2e2;
+      color: #7f1d1d;
+    }
+    .summary-card.pending {
+      background: #fef3c7;
+      color: #78350f;
+    }
+    .summary-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .summary-label {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    button {
+      padding: 10px 16px;
+      background: #7c3aed;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background: #6d28d9;
+    }
+    .code-block {
+      background: #f3f4f6;
+      padding: 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Share Panel Service Tests</h1>
+  <button onclick="runAllTests()">Run All Tests</button>
+
+  <div class="summary" id="summary" style="display: none;">
+    <div class="summary-card passed">
+      <div class="summary-value" id="passed-count">0</div>
+      <div class="summary-label">Passed</div>
+    </div>
+    <div class="summary-card failed">
+      <div class="summary-value" id="failed-count">0</div>
+      <div class="summary-label">Failed</div>
+    </div>
+    <div class="summary-card pending">
+      <div class="summary-value" id="pending-count">0</div>
+      <div class="summary-label">Pending</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value" id="total-count">0</div>
+      <div class="summary-label">Total</div>
+    </div>
+  </div>
+
+  <div id="test-results"></div>
+
+  <script src="/index.html" defer></script>
+  <script>
+    // Import sharing service from inline service defined in index.html
+    let testResults = [];
+    let testsPassed = 0;
+    let testsFailed = 0;
+
+    // Test utilities
+    function assert(condition, message) {
+      if (!condition) {
+        throw new Error(message);
+      }
+    }
+
+    function assertEquals(actual, expected, message) {
+      if (actual !== expected) {
+        throw new Error(`${message}: expected "${expected}", got "${actual}"`);
+      }
+    }
+
+    function assertTrue(value, message) {
+      if (!value) {
+        throw new Error(message);
+      }
+    }
+
+    function assertFalse(value, message) {
+      if (value) {
+        throw new Error(message);
+      }
+    }
+
+    function addTestResult(name, passed, error = null) {
+      testResults.push({ name, passed, error });
+      if (passed) {
+        testsPassed++;
+      } else {
+        testsFailed++;
+      }
+    }
+
+    function clearTestData() {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+
+    function createMockRun(runId, tasks = []) {
+      const runData = {
+        id: runId,
+        tasks: tasks.length > 0 ? tasks : [
+          { description: 'Task 1', status: 'completed' },
+          { description: 'Task 2', status: 'pending' }
+        ],
+        thoughts: ['Thought 1', 'Thought 2'],
+        metadata: { version: 1 }
+      };
+      localStorage.setItem(`kudbee:run:${runId}`, JSON.stringify(runData));
+      return runData;
+    }
+
+    // ─── TEST SUITE 1: Export Functionality ────────────────────────
+    function testExportRunHtml() {
+      clearTestData();
+      createMockRun('run-001');
+      const result = runSharingService.exportRun('run-001');
+      assertTrue(result.html.includes('<!DOCTYPE html>'), 'HTML export should contain DOCTYPE');
+      assertTrue(result.html.includes('Task 1'), 'HTML export should contain task descriptions');
+      assertTrue(result.html.includes('completed'), 'HTML export should contain task statuses');
+    }
+
+    function testExportRunMarkdown() {
+      clearTestData();
+      createMockRun('run-002');
+      const result = runSharingService.exportRun('run-002');
+      assertTrue(result.markdown.includes('# Run Export'), 'Markdown export should have h1 heading');
+      assertTrue(result.markdown.includes('Task 1'), 'Markdown export should contain task descriptions');
+      assertTrue(result.markdown.includes('**Exported:**'), 'Markdown export should contain export timestamp');
+    }
+
+    function testExportRunJson() {
+      clearTestData();
+      createMockRun('run-003', [
+        { description: 'Test Task', status: 'completed' }
+      ]);
+      const result = runSharingService.exportRun('run-003');
+      const json = JSON.parse(result.json);
+      assertEquals(json.id, 'run-003', 'JSON should contain run ID');
+      assertTrue(Array.isArray(json.tasks), 'JSON should contain tasks array');
+      assertEquals(json.tasks.length, 1, 'JSON should have correct number of tasks');
+      assertEquals(json.tasks[0].description, 'Test Task', 'JSON task should match original');
+    }
+
+    function testExportRunNotFound() {
+      clearTestData();
+      try {
+        runSharingService.exportRun('nonexistent');
+        throw new Error('Should throw for nonexistent run');
+      } catch (e) {
+        assertTrue(e.message.includes('not found'), 'Should throw "not found" error');
+      }
+    }
+
+    function testExportRunWithHtmlEntities() {
+      clearTestData();
+      createMockRun('run-004', [
+        { description: '<script>alert("xss")</script>', status: 'completed' }
+      ]);
+      const result = runSharingService.exportRun('run-004');
+      assertFalse(result.html.includes('<script>'), 'HTML should escape script tags');
+      assertTrue(result.html.includes('&lt;script&gt;') || result.html.includes('script'), 'HTML should contain escaped content');
+    }
+
+    // ─── TEST SUITE 2: Share Creation ────────────────────────────
+    function testCreateShareBasic() {
+      clearTestData();
+      createMockRun('run-005');
+      const result = runSharingService.createShare('run-005');
+      assertTrue(result.shareId.startsWith('share-'), 'Share ID should have correct prefix');
+      assertTrue(result.url.includes('share='), 'URL should contain share parameter');
+      assertFalse(result.expiresAt, 'Share without expiration should not have expiresAt');
+    }
+
+    function testCreateShareWithExpiration() {
+      clearTestData();
+      createMockRun('run-006');
+      const oneHourMs = 3600000;
+      const result = runSharingService.createShare('run-006', { expiresIn: oneHourMs });
+      assertTrue(result.expiresAt, 'Share with expiration should have expiresAt');
+      const expiry = new Date(result.expiresAt);
+      const now = new Date();
+      const diffMs = expiry.getTime() - now.getTime();
+      assertTrue(diffMs > 0 && diffMs <= oneHourMs, 'Expiration should be ~1 hour from now');
+    }
+
+    function testCreateShareMultiple() {
+      clearTestData();
+      createMockRun('run-007');
+      const share1 = runSharingService.createShare('run-007');
+      const share2 = runSharingService.createShare('run-007');
+      assertFalse(share1.shareId === share2.shareId, 'Each share should have unique ID');
+      assertTrue(share1.url.includes(share1.shareId), 'URL should contain share ID');
+      assertTrue(share2.url.includes(share2.shareId), 'URL should contain share ID');
+    }
+
+    function testCreateShareNotFound() {
+      clearTestData();
+      try {
+        runSharingService.createShare('nonexistent');
+        throw new Error('Should throw for nonexistent run');
+      } catch (e) {
+        assertTrue(e.message.includes('not found'), 'Should throw "not found" error');
+      }
+    }
+
+    function testCreateSharePersistsToSessionStorage() {
+      clearTestData();
+      createMockRun('run-008');
+      runSharingService.createShare('run-008');
+      const stored = sessionStorage.getItem('kudbee:shares');
+      assertTrue(stored, 'Should persist shares to sessionStorage');
+      const shares = JSON.parse(stored);
+      assertTrue(Array.isArray(shares), 'Stored shares should be array');
+      assertTrue(shares.length > 0, 'Should have at least one share stored');
+    }
+
+    // ─── TEST SUITE 3: Share Deletion ────────────────────────────
+    function testDeleteShare() {
+      clearTestData();
+      createMockRun('run-009');
+      const share = runSharingService.createShare('run-009');
+      const deleted = runSharingService.deleteShare(share.shareId);
+      assertTrue(deleted, 'deleteShare should return true for existing share');
+      const shares = runSharingService.getSharesForRun('run-009');
+      assertEquals(shares.length, 0, 'Share should be removed from list');
+    }
+
+    function testDeleteShareNonexistent() {
+      clearTestData();
+      const deleted = runSharingService.deleteShare('nonexistent');
+      assertFalse(deleted, 'deleteShare should return false for nonexistent share');
+    }
+
+    function testDeleteSharePersists() {
+      clearTestData();
+      createMockRun('run-010');
+      const share = runSharingService.createShare('run-010');
+      runSharingService.deleteShare(share.shareId);
+      const stored = sessionStorage.getItem('kudbee:shares');
+      const shares = JSON.parse(stored || '[]');
+      const found = shares.find(s => s.shareId === share.shareId);
+      assertFalse(found, 'Deleted share should not be in sessionStorage');
+    }
+
+    // ─── TEST SUITE 4: Get Shares for Run ───────────────────────
+    function testGetSharesForRun() {
+      clearTestData();
+      createMockRun('run-011');
+      runSharingService.createShare('run-011');
+      runSharingService.createShare('run-011');
+      const shares = runSharingService.getSharesForRun('run-011');
+      assertEquals(shares.length, 2, 'Should return all shares for run');
+    }
+
+    function testGetSharesForRunEmpty() {
+      clearTestData();
+      createMockRun('run-012');
+      const shares = runSharingService.getSharesForRun('run-012');
+      assertEquals(shares.length, 0, 'Should return empty array when no shares exist');
+    }
+
+    function testGetSharesForRunFilters() {
+      clearTestData();
+      createMockRun('run-013');
+      createMockRun('run-014');
+      runSharingService.createShare('run-013');
+      runSharingService.createShare('run-013');
+      runSharingService.createShare('run-014');
+      const shares13 = runSharingService.getSharesForRun('run-013');
+      const shares14 = runSharingService.getSharesForRun('run-014');
+      assertEquals(shares13.length, 2, 'Should return only shares for run-013');
+      assertEquals(shares14.length, 1, 'Should return only shares for run-014');
+    }
+
+    function testGetSharesFiltersExpired() {
+      clearTestData();
+      createMockRun('run-015');
+      // Create share that expires immediately
+      const share = runSharingService.createShare('run-015', { expiresIn: 1 });
+      // Wait for expiration
+      setTimeout(() => {
+        const shares = runSharingService.getSharesForRun('run-015');
+        assertEquals(shares.length, 0, 'Expired shares should be filtered out');
+      }, 100);
+    }
+
+    // ─── TEST SUITE 5: Share Expiration ─────────────────────────
+    function testShareExpiration() {
+      clearTestData();
+      createMockRun('run-016');
+      const oneHourMs = 3600000;
+      const share = runSharingService.createShare('run-016', { expiresIn: oneHourMs });
+      const expiry = new Date(share.expiresAt);
+      const now = new Date();
+      assertTrue(expiry > now, 'Expiration time should be in future');
+    }
+
+    function testAccessShareIncrementsCount() {
+      clearTestData();
+      createMockRun('run-017');
+      const share = runSharingService.createShare('run-017');
+      runSharingService.accessShare(share.shareId);
+      const shares = runSharingService.getSharesForRun('run-017');
+      assertEquals(shares[0].accessCount, 1, 'Access count should be incremented');
+    }
+
+    function testAccessShareMultipleTimes() {
+      clearTestData();
+      createMockRun('run-018');
+      const share = runSharingService.createShare('run-018');
+      runSharingService.accessShare(share.shareId);
+      runSharingService.accessShare(share.shareId);
+      runSharingService.accessShare(share.shareId);
+      const shares = runSharingService.getSharesForRun('run-018');
+      assertEquals(shares[0].accessCount, 3, 'Access count should track all accesses');
+    }
+
+    function testGetSharedRun() {
+      clearTestData();
+      createMockRun('run-019', [
+        { description: 'Shared Task', status: 'completed' }
+      ]);
+      const share = runSharingService.createShare('run-019');
+      const runData = runSharingService.getSharedRun(share.shareId);
+      assertTrue(runData, 'Should return run data for valid share');
+      assertEquals(runData.id, 'run-019', 'Should return correct run');
+      assertTrue(runData.tasks.length > 0, 'Should include tasks');
+    }
+
+    function testGetSharedRunNotFound() {
+      clearTestData();
+      const runData = runSharingService.getSharedRun('invalid-share');
+      assertFalse(runData, 'Should return null/false for invalid share');
+    }
+
+    // ─── TEST SUITE 6: Error Handling ──────────────────────────
+    function testErrorMessageOnInvalidRun() {
+      clearTestData();
+      try {
+        runSharingService.exportRun('invalid-run-id');
+        throw new Error('Should throw error');
+      } catch (e) {
+        assertTrue(e.message, 'Error should have message');
+        assertTrue(e.message.includes('not found') || e.message.includes('export'), 'Error message should be descriptive');
+      }
+    }
+
+    function testErrorHandlingOnCreateShare() {
+      clearTestData();
+      try {
+        runSharingService.createShare(null);
+        throw new Error('Should throw error');
+      } catch (e) {
+        assertTrue(e.message, 'Should throw error for invalid input');
+      }
+    }
+
+    // ─── Test Runner ──────────────────────────────────────────
+    const testSuites = {
+      'Export Functionality': [
+        { name: 'Export HTML format', fn: testExportRunHtml },
+        { name: 'Export Markdown format', fn: testExportRunMarkdown },
+        { name: 'Export JSON format', fn: testExportRunJson },
+        { name: 'Export nonexistent run throws error', fn: testExportRunNotFound },
+        { name: 'Export escapes HTML entities', fn: testExportRunWithHtmlEntities }
+      ],
+      'Share Creation': [
+        { name: 'Create basic share link', fn: testCreateShareBasic },
+        { name: 'Create share with expiration', fn: testCreateShareWithExpiration },
+        { name: 'Create multiple shares for same run', fn: testCreateShareMultiple },
+        { name: 'Create share for nonexistent run throws error', fn: testCreateShareNotFound },
+        { name: 'Create share persists to sessionStorage', fn: testCreateSharePersistsToSessionStorage }
+      ],
+      'Share Deletion': [
+        { name: 'Delete share by ID', fn: testDeleteShare },
+        { name: 'Delete nonexistent share returns false', fn: testDeleteShareNonexistent },
+        { name: 'Delete share persists to sessionStorage', fn: testDeleteSharePersists }
+      ],
+      'Get Shares for Run': [
+        { name: 'Get shares for run with multiple shares', fn: testGetSharesForRun },
+        { name: 'Get shares for run with no shares', fn: testGetSharesForRunEmpty },
+        { name: 'Get shares filters by run ID', fn: testGetSharesForRunFilters }
+      ],
+      'Share Expiration': [
+        { name: 'Share has correct expiration time', fn: testShareExpiration },
+        { name: 'Access share increments count', fn: testAccessShareIncrementsCount },
+        { name: 'Access share multiple times tracks count', fn: testAccessShareMultipleTimes },
+        { name: 'Get shared run returns correct data', fn: testGetSharedRun },
+        { name: 'Get shared run for invalid share returns null', fn: testGetSharedRunNotFound }
+      ],
+      'Error Handling': [
+        { name: 'Export invalid run throws error', fn: testErrorMessageOnInvalidRun },
+        { name: 'Create share with invalid input throws error', fn: testErrorHandlingOnCreateShare }
+      ]
+    };
+
+    function runAllTests() {
+      testResults = [];
+      testsPassed = 0;
+      testsFailed = 0;
+      const resultsContainer = document.getElementById('test-results');
+      resultsContainer.innerHTML = '';
+
+      for (const [suiteName, tests] of Object.entries(testSuites)) {
+        const suiteDiv = document.createElement('div');
+        suiteDiv.className = 'test-container';
+
+        const header = document.createElement('div');
+        header.className = 'test-header';
+        header.textContent = suiteName;
+        suiteDiv.appendChild(header);
+
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'test-group';
+
+        for (const test of tests) {
+          const testDiv = document.createElement('div');
+          let passed = false;
+          let error = null;
+
+          try {
+            test.fn();
+            passed = true;
+          } catch (e) {
+            error = e.message;
+          }
+
+          addTestResult(test.name, passed, error);
+
+          testDiv.className = `test-case ${passed ? 'pass' : 'fail'}`;
+          testDiv.innerHTML = `
+            <div class="test-name">${passed ? '✓' : '✗'} ${test.name}</div>
+            <div class="test-result">${passed ? 'Passed' : 'Failed'}</div>
+            ${error ? `<div class="test-error">${error}</div>` : ''}
+          `;
+          groupDiv.appendChild(testDiv);
+        }
+
+        suiteDiv.appendChild(groupDiv);
+        resultsContainer.appendChild(suiteDiv);
+      }
+
+      // Update summary
+      document.getElementById('passed-count').textContent = testsPassed;
+      document.getElementById('failed-count').textContent = testsFailed;
+      document.getElementById('pending-count').textContent = '0';
+      document.getElementById('total-count').textContent = testsPassed + testsFailed;
+      document.getElementById('summary').style.display = 'grid';
+
+      console.log(`\n✓ Tests completed: ${testsPassed} passed, ${testsFailed} failed`);
+    }
+
+    // Auto-run on page load after service is available
+    window.addEventListener('load', () => {
+      // Give the index.html scripts time to load
+      setTimeout(() => {
+        if (window.runSharingService) {
+          console.log('Sharing service loaded, ready to run tests');
+        }
+      }, 500);
+    });
+  </script>
+</body>
+</html>
