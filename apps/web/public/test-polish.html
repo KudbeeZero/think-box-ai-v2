@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Polish Tests</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/polish.css">
+  <style>
+    body { overflow: auto; height: auto; padding: 20px; }
+    .wrap { max-width: 960px; margin: 0 auto; color: var(--text-primary); }
+    h1 { font-size: 20px; margin-bottom: 12px; }
+    .summary { display: flex; gap: 12px; margin: 12px 0 20px; }
+    .card { padding: 12px 18px; border-radius: 10px; background: var(--bg-panel); border: 1px solid var(--border-color); font-size: 13px; }
+    .card strong { display: block; font-size: 22px; }
+    .suite { margin-bottom: 18px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-panel); overflow: hidden; }
+    .suite h2 { font-size: 14px; padding: 10px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
+    .case { padding: 7px 14px; font-size: 13px; border-bottom: 1px solid var(--border-color); }
+    .case:last-child { border-bottom: none; }
+    .case.pass::before { content: '✓ '; color: var(--success); }
+    .case.fail::before { content: '✗ '; color: var(--error); }
+    .case .err { color: var(--error); font-family: var(--font-mono); font-size: 12px; margin-top: 3px; }
+    .fixture { position: absolute; left: -9999px; top: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Dashboard Polish — Command Palette, Theme, Glass, Shortcuts, Notifications</h1>
+    <button id="rerun" class="btn-primary">Run all tests</button>
+    <div class="summary" id="summary"></div>
+    <div id="results"></div>
+  </div>
+
+  <!-- Minimal host DOM the polish modules attach to -->
+  <div class="fixture" aria-hidden="true">
+    <div class="header-right"><div class="status-indicator"></div></div>
+    <input id="goal-input" type="text">
+    <button id="run-goal" type="button">Run</button>
+  </div>
+
+  <script src="/js/ui-utils.js"></script>
+  <script src="/js/shortcuts.js"></script>
+  <script src="/js/notification-center.js"></script>
+  <script src="/js/theme-switcher.js"></script>
+  <script src="/js/command-palette.js"></script>
+  <script src="/js/shortcuts-reference.js"></script>
+
+  <script>
+    const U = window.KudbeeUI;
+    const suites = [];
+    const suite = (name, tests) => suites.push({ name, tests });
+
+    const assert = (cond, msg) => { if (!cond) throw new Error(msg || 'assertion failed'); };
+    const eq = (a, b, msg) => {
+      if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg || 'not equal'}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+    };
+    const keyEvent = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: false, defaultPrevented: false, target: document.body, preventDefault() { this.defaultPrevented = true; }, ...o });
+    const resetStorage = () => { localStorage.clear(); sessionStorage.clear(); };
+
+    // ─── KudbeeUI helpers ──────────────────────────────────────────
+    suite('KudbeeUI helpers', [
+      ['esc escapes HTML special characters', () => eq(U.esc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;')],
+      ['esc tolerates null/undefined', () => eq([U.esc(null), U.esc(undefined)], ['', ''])],
+      ['save/load round-trips JSON', () => { resetStorage(); U.save('t:k', { a: [1, 2] }); eq(U.load('t:k', null), { a: [1, 2] }); }],
+      ['load returns fallback for missing key', () => { resetStorage(); eq(U.load('t:none', 'fb'), 'fb'); }],
+      ['load returns fallback for corrupt JSON', () => { resetStorage(); localStorage.setItem('t:bad', '{oops'); eq(U.load('t:bad', 7), 7); }],
+      ['relativeTime buckets', () => {
+        const now = 10 * 24 * 3600 * 1000;
+        eq([U.relativeTime(now - 5000, now), U.relativeTime(now - 5 * 60e3, now), U.relativeTime(now - 3 * 3600e3, now), U.relativeTime(now - 50 * 3600e3, now)], ['just now', '5m ago', '3h ago', '2d ago']);
+      }],
+      ['keyWords formats combos', () => assert(/^(Cmd|Ctrl)\+K$/.test(U.keyWords('mod+k')) && U.keyWords('alt+shift+w').endsWith('+Shift+W'))],
+      ['kbdHtml renders one <kbd> per key', () => eq((U.kbdHtml('mod+k').match(/<kbd>/g) || []).length, 2)],
+    ]);
+
+    // ─── Fuzzy search ──────────────────────────────────────────────
+    const F = (q, t) => CommandPalette.fuzzyScore(q, t);
+    suite('Command palette — fuzzy matching', [
+      ['empty query matches everything with score 0', () => eq(F('', 'anything'), { score: 0, indexes: [] })],
+      ['non-matching query returns null', () => eq(F('xyz', 'Run goal'), null)],
+      ['matching is case-insensitive', () => assert(F('RUN', 'run goal') !== null)],
+      ['subsequence match returns ordered indexes', () => eq(F('rg', 'Run goal').indexes, [0, 4])],
+      ['out-of-order characters do not match', () => eq(F('gr', 'rg'), null)],
+      ['substring outranks scattered subsequence', () => assert(F('goal', 'Run goal').score > F('goal', 'go a long').score)],
+      ['prefix outranks mid-word substring', () => assert(F('the', 'Theme: Dark').score > F('the', 'Another theme').score)],
+      ['whitespace in query is ignored', () => assert(F('theme light', 'Theme: Light') !== null)],
+      ['highlight wraps matched characters', () => eq(CommandPalette.highlight('Run goal', [0, 4]), '<mark>R</mark>un <mark>g</mark>oal')],
+      ['highlight escapes HTML in the text', () => eq(CommandPalette.highlight('<b>', [1]), '&lt;<mark>b</mark>&gt;')],
+    ]);
+
+    // ─── Palette behaviour ─────────────────────────────────────────
+    const makePalette = () => {
+      document.querySelectorAll('.cp-overlay').forEach((n) => n.remove());
+      resetStorage();
+      return new CommandPalette();
+    };
+    const item = (id, type, title, extra = {}) => ({ id, type, title, icon: '•', run() { this.ran = true; }, ...extra });
+
+    suite('Command palette — search and UI', [
+      ['search ranks the best title first', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'Clear terminal'), item('b', 'command', 'Run goal'), item('c', 'command', 'Refresh models')];
+        eq(p.search('run')[0].item.id, 'b');
+      }],
+      ['results are grouped with a heading on the first row of each type', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'Theme tool'), item('b', 'profile', 'Theme profile'), item('c', 'workflow', 'Theme flow')];
+        const headings = p.search('theme').filter((r) => r.heading).map((r) => r.heading);
+        eq(headings.sort(), ['Commands', 'Profiles', 'Workflows']);
+      }],
+      ['each group is capped', () => {
+        const p = makePalette();
+        p.items = Array.from({ length: 12 }, (_, i) => item(`g${i}`, 'goal', `deploy ${i}`));
+        eq(p.search('deploy').length, CommandPalette.PER_GROUP);
+      }],
+      ['subtitle matches literally but not as a loose subsequence', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'Alpha', { subtitle: 'restart the server' })];
+        eq([p.search('server').length, p.search('rsv').length], [1, 0]);
+      }],
+      ['empty query shows suggested items', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'Run goal', { suggested: true }), item('b', 'command', 'Other')];
+        const r = p.search('');
+        eq([r.length, r[0].heading], [1, 'Suggested']);
+      }],
+      ['recent items come first under "Recent"', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'A', { suggested: true }), item('b', 'command', 'B')];
+        U.save(CommandPalette.RECENT_KEY, ['b']);
+        const r = p.search('');
+        eq([r[0].item.id, r[0].heading, r[1].item.id], ['b', 'Recent', 'a']);
+      }],
+      ['recent ids that no longer exist are ignored', () => {
+        const p = makePalette();
+        p.items = [item('a', 'command', 'A', { suggested: true })];
+        U.save(CommandPalette.RECENT_KEY, ['gone']);
+        eq(p.search('').map((r) => r.item.id), ['a']);
+      }],
+      ['open() renders an accessible dialog and focuses the input', () => {
+        const p = makePalette();
+        p.open();
+        assert(p.isOpen() && document.querySelector('.cp-overlay [role="dialog"][aria-modal="true"]'), 'dialog missing');
+        eq(document.activeElement, p.input, 'input not focused');
+        p.close();
+        assert(!document.querySelector('.cp-overlay'), 'overlay should be removed');
+      }],
+      ['open() lists real commands, themes and shortcut hints', () => {
+        const p = makePalette();
+        p.open();
+        p.input.value = 'theme';
+        p.input.dispatchEvent(new Event('input'));
+        const titles = [...document.querySelectorAll('.cp-item-title')].map((n) => n.textContent);
+        assert(titles.some((t) => t.includes('Dark')) && titles.some((t) => t.includes('Light')), 'theme settings missing');
+        p.close();
+      }],
+      ['ArrowDown/ArrowUp move and wrap the selection', () => {
+        const p = makePalette();
+        p.open();
+        const n = p.results.length;
+        assert(n >= 2, 'need at least 2 results');
+        const press = (key) => p.overlay.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+        press('ArrowDown');
+        eq(p.activeIndex, 1);
+        press('ArrowUp'); press('ArrowUp');
+        eq(p.activeIndex, n - 1, 'should wrap to last');
+        p.close();
+      }],
+      ['Escape closes the palette', () => {
+        const p = makePalette();
+        p.open();
+        p.overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        assert(!p.isOpen());
+      }],
+      ['Enter runs the active item and records it as recent', async () => {
+        const p = makePalette();
+        const it = item('x', 'command', 'Do the thing', { suggested: true });
+        p.gather = () => [it];
+        p.open();
+        p.overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await new Promise((r) => setTimeout(r, 20));
+        assert(it.ran, 'item did not run');
+        eq(U.load(CommandPalette.RECENT_KEY, []), ['x']);
+        assert(!p.isOpen(), 'palette should close');
+      }],
+      ['no matches shows an empty state without throwing', () => {
+        const p = makePalette();
+        p.open();
+        p.input.value = 'zzzzqqqq';
+        p.input.dispatchEvent(new Event('input'));
+        assert(document.querySelector('.cp-empty').textContent.includes('No results'));
+        p.overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        p.close();
+      }],
+      ['submitted goals are recorded, de-duplicated and capped', () => {
+        const p = makePalette();
+        const input = document.getElementById('goal-input');
+        for (let i = 0; i < 12; i++) { input.value = `goal ${i}`; document.getElementById('run-goal').click(); }
+        input.value = 'goal 5'; document.getElementById('run-goal').click();
+        const goals = U.load(CommandPalette.GOALS_KEY, []);
+        eq([goals.length, goals[0], goals.filter((g) => g === 'goal 5').length], [CommandPalette.MAX_GOALS, 'goal 5', 1]);
+        input.value = '';
+      }],
+      ['goal items are escaped when rendered', () => {
+        const p = makePalette();
+        U.save(CommandPalette.GOALS_KEY, ['<img src=x onerror=alert(1)>']);
+        p.open();
+        p.input.value = 'img';
+        p.input.dispatchEvent(new Event('input'));
+        assert(!document.querySelector('.cp-list img'), 'goal text was injected as HTML');
+        p.close();
+      }],
+    ]);
+
+    // ─── Shortcut registry ─────────────────────────────────────────
+    const M = ShortcutRegistry.matches;
+    suite('Keyboard shortcuts — registry', [
+      ['parse splits modifiers and key', () => eq(ShortcutRegistry.parse('alt+shift+w'), { key: 'w', mod: false, alt: true, shift: true })],
+      ['mod matches Ctrl and Meta', () => assert(M(keyEvent({ key: 'k', ctrlKey: true }), 'mod+k') && M(keyEvent({ key: 'k', metaKey: true }), 'mod+k'))],
+      ['plain key does not match when mod is held', () => assert(!M(keyEvent({ key: 'k', ctrlKey: true }), 'k'))],
+      ['extra modifiers do not match', () => assert(!M(keyEvent({ key: 'k', ctrlKey: true, altKey: true }), 'mod+k'))],
+      ['Shift is required when listed', () => assert(!M(keyEvent({ key: 'w', altKey: true }), 'alt+shift+w') && M(keyEvent({ key: 'W', altKey: true, shiftKey: true }), 'alt+shift+w'))],
+      ['mod+? matches Shift+/ typed as "?"', () => assert(M(keyEvent({ key: '?', ctrlKey: true, shiftKey: true }), 'mod+?'))],
+      ['mod+? also matches layouts reporting "/" with Shift', () => assert(M(keyEvent({ key: '/', ctrlKey: true, shiftKey: true }), 'mod+?'))],
+      ['bare "/" does not fire on Shift+/ ("?")', () => assert(!M(keyEvent({ key: '?', shiftKey: true }), '/'))],
+      ['Alt combos match by e.code (macOS Option rewrites e.key)', () => assert(M(keyEvent({ key: '†', code: 'KeyT', altKey: true }), 'alt+t'))],
+      ['named keys match', () => assert(M(keyEvent({ key: 'Enter', ctrlKey: true }), 'mod+enter') && M(keyEvent({ key: 'Escape' }), 'escape'))],
+      ['isTyping detects form fields', () => {
+        const input = document.createElement('input');
+        assert(ShortcutRegistry.isTyping(input) && !ShortcutRegistry.isTyping(document.body));
+      }],
+      ['handle runs the action and prevents default', () => {
+        const r = new ShortcutRegistry(); let ran = 0;
+        r.register({ id: 'a', keys: 'mod+k', action: () => ran++ });
+        const e = keyEvent({ key: 'k', ctrlKey: true }); r.handle(e);
+        eq([ran, e.defaultPrevented], [1, true]);
+      }],
+      ['unmodified shortcuts are ignored while typing', () => {
+        const r = new ShortcutRegistry(); let ran = 0;
+        r.register({ id: 'a', keys: '/', action: () => ran++ });
+        r.handle(keyEvent({ key: '/', target: document.createElement('input') }));
+        eq(ran, 0);
+        r.handle(keyEvent({ key: '/' }));
+        eq(ran, 1);
+      }],
+      ['modified shortcuts still work while typing', () => {
+        const r = new ShortcutRegistry(); let ran = 0;
+        r.register({ id: 'a', keys: 'mod+k', action: () => ran++ });
+        r.handle(keyEvent({ key: 'k', ctrlKey: true, target: document.createElement('input') }));
+        eq(ran, 1);
+      }],
+      ['action returning false keeps default behavior', () => {
+        const r = new ShortcutRegistry();
+        r.register({ id: 'a', keys: 'escape', action: () => false });
+        const e = keyEvent({ key: 'Escape' }); r.handle(e);
+        assert(!e.defaultPrevented);
+      }],
+      ['open modals block shortcuts unless allowInModal', () => {
+        const r = new ShortcutRegistry(); const ran = [];
+        r.register({ id: 'a', keys: 'mod+enter', action: () => ran.push('a') });
+        r.register({ id: 'b', keys: 'mod+k', allowInModal: true, action: () => ran.push('b') });
+        const modal = document.createElement('div'); modal.setAttribute('data-kb-modal', 'x'); document.body.appendChild(modal);
+        r.handle(keyEvent({ key: 'Enter', ctrlKey: true }));
+        r.handle(keyEvent({ key: 'k', ctrlKey: true }));
+        modal.remove();
+        eq(ran, ['b']);
+      }],
+      ['already-handled and IME events are ignored', () => {
+        const r = new ShortcutRegistry(); let ran = 0;
+        r.register({ id: 'a', keys: 'mod+k', action: () => ran++ });
+        r.handle(keyEvent({ key: 'k', ctrlKey: true, defaultPrevented: true }));
+        r.handle(keyEvent({ key: 'k', ctrlKey: true, isComposing: true }));
+        eq(ran, 0);
+      }],
+      ['registering the same id replaces the binding', () => {
+        const r = new ShortcutRegistry();
+        r.register({ id: 'a', keys: 'mod+k' }).register({ id: 'a', keys: 'mod+j' });
+        eq([r.list().length, r.get('a').keys], [1, 'mod+j']);
+      }],
+      ['app registry exposes the documented shortcuts', () => {
+        ['palette.toggle', 'shortcuts.toggle', 'notifications.toggle', 'theme.cycle', 'run.start', 'goal.focus'].forEach((id) => assert(Shortcuts.get(id), `missing ${id}`));
+      }],
+      ['no two actionable shortcuts share a key combo', () => {
+        const combos = Shortcuts.list().filter((i) => i.action).map((i) => i.keys);
+        eq(combos.length, new Set(combos).size);
+      }],
+    ]);
+
+    // ─── Shortcuts reference ───────────────────────────────────────
+    const sample = [
+      { id: '1', keys: 'mod+k', category: 'General', description: 'Open command palette' },
+      { id: '2', keys: 'alt+t', category: 'General', description: 'Cycle theme' },
+      { id: '3', keys: 'alt+w', category: 'Workflow', description: 'Go to workflow builder' },
+      { id: '4', keys: 'weird', category: 'Zebra', description: 'Unknown category' },
+    ];
+    suite('Keyboard shortcuts — reference modal', [
+      ['group orders known categories first', () => eq(ShortcutsReference.group(sample).map((g) => g[0]), ['General', 'Workflow', 'Zebra'])],
+      ['filter matches description', () => eq(ShortcutsReference.group(sample, 'theme').map((g) => [g[0], g[1].length]), [['General', 1]])],
+      ['filter matches category and key text', () => {
+        eq(ShortcutsReference.group(sample, 'workflow').length, 1);
+        eq(ShortcutsReference.group(sample, 'alt+t').length, 1);
+      }],
+      ['filter with no match returns no groups', () => eq(ShortcutsReference.group(sample, 'zzz'), [])],
+      ['open() renders every category and a copy button per row', () => {
+        const ref = new ShortcutsReference(); ref.open();
+        const rows = document.querySelectorAll('.sk-row').length;
+        eq(rows, Shortcuts.list().length);
+        eq(document.querySelectorAll('.sk-copy').length, rows);
+        ref.close();
+      }],
+      ['typing in the filter narrows the list', () => {
+        const ref = new ShortcutsReference(); ref.open();
+        ref.input.value = 'theme'; ref.input.dispatchEvent(new Event('input'));
+        const rows = [...document.querySelectorAll('.sk-desc')].map((n) => n.textContent.toLowerCase());
+        assert(rows.length >= 1 && rows.every((t) => t.includes('theme')));
+        ref.input.value = 'qqqq'; ref.input.dispatchEvent(new Event('input'));
+        assert(document.querySelector('.sk-body .cp-empty'), 'empty state missing');
+        ref.close();
+      }],
+      ['Escape closes and the dialog is labelled', () => {
+        const ref = new ShortcutsReference(); ref.open();
+        assert(document.querySelector('.sk-modal[aria-labelledby="sk-title"]'));
+        ref.overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        assert(!ref.isOpen() && !document.querySelector('.sk-overlay'));
+      }],
+      ['opening it closes the palette (one modal at a time)', () => {
+        const p = window.CommandPaletteInstance; p.open();
+        const ref = new ShortcutsReference(); ref.open();
+        assert(!p.isOpen(), 'palette should have closed');
+        ref.close();
+      }],
+      ['print stylesheet hides the app and shows only the reference', () => {
+        const css = [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules]; } catch (e) { return []; } });
+        const print = css.filter((r) => r.type === CSSRule.MEDIA_RULE && /print/.test(r.conditionText || r.media.mediaText));
+        assert(print.length && print.some((r) => r.cssText.includes('print-shortcuts') && r.cssText.includes('#app')), 'print rules missing');
+      }],
+    ]);
+
+    // ─── Theme switcher ────────────────────────────────────────────
+    suite('Theme switcher', [
+      ['set() applies the theme to <html> and persists it', () => {
+        const t = ThemeSwitcherInstance; t.set('light');
+        eq([document.documentElement.dataset.theme, document.documentElement.dataset.themePref, U.load('kudbee:theme', null)], ['light', 'light', 'light']);
+        t.set('dark');
+        eq(document.documentElement.dataset.theme, 'dark');
+      }],
+      ['system follows prefers-color-scheme', () => {
+        const t = ThemeSwitcherInstance; const real = t.media;
+        t.media = { matches: true }; eq(t.resolve('system'), 'dark');
+        t.media = { matches: false }; eq(t.resolve('system'), 'light');
+        t.media = real;
+      }],
+      ['system preference resolves live when the OS changes', () => {
+        const t = ThemeSwitcherInstance; const real = t.media;
+        t.media = { matches: false }; t.set('system'); eq(document.documentElement.dataset.theme, 'light');
+        t.media = { matches: true }; t.apply('system'); eq(document.documentElement.dataset.theme, 'dark');
+        t.media = real;
+      }],
+      ['invalid preference falls back to system', () => {
+        const t = ThemeSwitcherInstance; t.apply('neon');
+        eq(document.documentElement.dataset.themePref, 'system');
+      }],
+      ['corrupt stored value falls back to system', () => {
+        localStorage.setItem('kudbee:theme', '"neon"');
+        eq(ThemeSwitcherInstance.readPreference(), 'system');
+        localStorage.setItem('kudbee:theme', '{bad');
+        eq(ThemeSwitcherInstance.readPreference(), 'system');
+      }],
+      ['cycle() goes light → dark → system → light', () => {
+        const t = ThemeSwitcherInstance; t.set('light');
+        const seen = []; for (let i = 0; i < 3; i++) { t.cycle(); seen.push(t.preference); }
+        eq(seen, ['dark', 'system', 'light']);
+      }],
+      ['theme:changed event reports preference and resolved theme', () => {
+        let detail = null; const h = (e) => (detail = e.detail);
+        document.addEventListener('theme:changed', h);
+        ThemeSwitcherInstance.set('dark');
+        document.removeEventListener('theme:changed', h);
+        eq(detail, { preference: 'dark', resolved: 'dark' });
+      }],
+      ['apply() adds then removes the transition class (0.3s fade)', async () => {
+        ThemeSwitcherInstance.set('light');
+        assert(document.documentElement.classList.contains('theme-transition'), 'class not added');
+        await new Promise((r) => setTimeout(r, 420));
+        assert(!document.documentElement.classList.contains('theme-transition'), 'class not removed');
+      }],
+      ['light and dark define different surface tokens', () => {
+        const t = ThemeSwitcherInstance;
+        t.set('dark'); const dark = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+        t.set('light'); const light = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+        assert(dark && light && dark !== light, `tokens identical: ${dark} / ${light}`);
+      }],
+      ['dropdown lists Light, Dark and System with the current one checked', () => {
+        const t = ThemeSwitcherInstance; t.set('dark');
+        const opts = [...document.querySelectorAll('.theme-option')];
+        eq(opts.map((o) => o.dataset.themeValue), ['light', 'dark', 'system']);
+        eq(opts.map((o) => o.getAttribute('aria-checked')), ['false', 'true', 'false']);
+      }],
+      ['glass surfaces use backdrop-filter blur(20px)', () => {
+        const probe = document.createElement('div'); probe.className = 'glass'; document.body.appendChild(probe);
+        const cs = getComputedStyle(probe); const bf = cs.backdropFilter || cs.webkitBackdropFilter;
+        probe.remove();
+        assert(/blur\(20px\)/.test(bf), `backdrop-filter was "${bf}"`);
+      }],
+      ['glass background is semi-transparent in both themes', () => {
+        ['light', 'dark'].forEach((mode) => {
+          ThemeSwitcherInstance.set(mode);
+          const probe = document.createElement('div'); probe.className = 'glass'; document.body.appendChild(probe);
+          const a = getComputedStyle(probe).backgroundColor.match(/rgba\(.*,\s*([\d.]+)\)/);
+          probe.remove();
+          assert(a && parseFloat(a[1]) < 1, `${mode} glass is opaque`);
+        });
+      }],
+    ]);
+
+    // ─── Notification center ───────────────────────────────────────
+    const freshNC = () => { resetStorage(); return new NotificationCenter(); };
+    suite('Notification center', [
+      ['first run seeds mock notifications across all four categories', () => {
+        const nc = freshNC();
+        eq([...new Set(nc.items.map((n) => n.category))].sort(), ['approvals', 'errors', 'runs', 'system']);
+        eq(nc.unreadCount(), 4);
+      }],
+      ['add() prepends an unread notification and persists it', () => {
+        const nc = freshNC(); const n = nc.add({ category: 'runs', title: 'Hello', body: 'World' });
+        eq([nc.items[0].id, n.read, U.load(NotificationCenter.STORAGE_KEY, []).length], [n.id, false, 6]);
+      }],
+      ['unknown category falls back to system', () => eq(freshNC().add({ category: 'bogus', title: 'x' }).category, 'system')],
+      ['add() without a title is rejected', () => eq(freshNC().add({ body: 'no title' }), null)],
+      ['markRead and markAllRead update the unread count', () => {
+        const nc = freshNC(); const first = nc.items.find((n) => !n.read);
+        nc.markRead(first.id); eq(nc.unreadCount(), 3);
+        nc.markRead(first.id, false); eq(nc.unreadCount(), 4);
+        nc.markAllRead(); eq(nc.unreadCount(), 0);
+      }],
+      ['dismiss removes one notification', () => {
+        const nc = freshNC(); const id = nc.items[0].id; nc.dismiss(id);
+        eq([nc.items.length, nc.items.some((n) => n.id === id)], [4, false]);
+      }],
+      ['clearAll empties the list and does not re-seed on reload', () => {
+        const nc = freshNC(); nc.clearAll();
+        eq(new NotificationCenter().items.length, 0);
+      }],
+      ['prune drops notifications older than 24h', () => {
+        const nc = freshNC();
+        const changed = nc.prune(false, Date.now() + NotificationCenter.TTL_MS + 1000);
+        eq([changed, nc.items.length], [true, 0]);
+      }],
+      ['prune keeps notifications inside the TTL', () => {
+        const nc = freshNC();
+        eq([nc.prune(false, Date.now() + 60 * 1000), nc.items.length], [false, 5]);
+      }],
+      ['expired notifications in storage are dropped on load', () => {
+        resetStorage(); U.save(NotificationCenter.SEEDED_KEY, true);
+        U.save(NotificationCenter.STORAGE_KEY, [
+          { id: 'old', category: 'system', title: 'old', body: '', ts: Date.now() - 25 * 3600e3, read: false },
+          { id: 'new', category: 'system', title: 'new', body: '', ts: Date.now() - 23 * 3600e3, read: false },
+        ]);
+        eq(new NotificationCenter().items.map((n) => n.id), ['new']);
+      }],
+      ['corrupt storage does not break startup', () => {
+        resetStorage(); localStorage.setItem(NotificationCenter.STORAGE_KEY, '{nope'); U.save(NotificationCenter.SEEDED_KEY, true);
+        eq(new NotificationCenter().items, []);
+      }],
+      ['list is capped at MAX_ITEMS', () => {
+        const nc = freshNC(); for (let i = 0; i < 120; i++) nc.add({ title: `n${i}` });
+        eq(nc.items.length, NotificationCenter.MAX_ITEMS);
+      }],
+      ['badge shows the unread count, 9+ when large, hidden at zero', () => {
+        const nc = freshNC();
+        eq([nc.badge.hidden, nc.badge.textContent], [false, '4']);
+        for (let i = 0; i < 8; i++) nc.add({ title: `x${i}` });
+        eq(nc.badge.textContent, '9+');
+        nc.markAllRead(); assert(nc.badge.hidden, 'badge should be hidden');
+      }],
+      ['category tabs filter the visible list', () => {
+        const nc = freshNC(); nc.filter = 'errors';
+        eq(nc.visibleItems().map((n) => n.category), ['errors']);
+        nc.filter = 'all'; eq(nc.visibleItems().length, 5);
+      }],
+      ['notification text is escaped when rendered', () => {
+        const nc = freshNC(); nc.add({ title: '<img src=x onerror=alert(1)>', body: '<b>bold</b>' });
+        assert(!nc.listEl.querySelector('img, b'), 'HTML was injected');
+        assert(nc.listEl.textContent.includes('<img src=x'), 'text should be shown literally');
+      }],
+      ['panel opens and closes with correct aria state', () => {
+        const nc = freshNC(); nc.openPanel();
+        eq([nc.isOpen(), nc.panel.getAttribute('aria-hidden')], [true, 'false']);
+        nc.close();
+        eq([nc.isOpen(), nc.panel.getAttribute('aria-hidden')], [false, 'true']);
+      }],
+      ['clicking an item marks it read; dismiss button removes it', () => {
+        const nc = freshNC(); nc.openPanel();
+        const row = nc.listEl.querySelector('.nc-item.unread'); const id = row.dataset.id;
+        row.click(); assert(nc.items.find((n) => n.id === id).read, 'not marked read');
+        nc.listEl.querySelector(`.nc-item[data-id="${id}"] [data-action="dismiss"]`).click();
+        assert(!nc.items.some((n) => n.id === id), 'not dismissed');
+        nc.close();
+      }],
+      ['Mark all read / Clear all buttons disable when there is nothing to do', () => {
+        const nc = freshNC(); nc.markAllRead();
+        eq(nc.panel.querySelector('[data-action="mark-all"]').disabled, true);
+        nc.clearAll();
+        eq(nc.panel.querySelector('[data-action="clear-all"]').disabled, true);
+      }],
+      ['addTest cycles through categories', () => {
+        const nc = freshNC(); nc.clearAll();
+        eq([1, 2, 3, 4].map(() => nc.addTest().category), ['system', 'approvals', 'runs', 'errors']);
+      }],
+      ['existing app events create notifications', () => {
+        const nc = freshNC(); nc.clearAll();
+        document.dispatchEvent(new CustomEvent('workflow-saved', { detail: { workflow: { name: 'Deploy' } } }));
+        document.dispatchEvent(new CustomEvent('run-completed'));
+        assert(nc.items.some((n) => n.title === 'Workflow saved' && n.body.includes('Deploy')));
+        assert(nc.items.some((n) => n.category === 'runs' && n.title === 'Run completed'));
+      }],
+    ]);
+
+    // ─── Runner ────────────────────────────────────────────────────
+    async function runAll() {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      let passed = 0, failed = 0;
+      const failures = [];
+      for (const s of suites) {
+        const box = document.createElement('div'); box.className = 'suite';
+        box.innerHTML = `<h2>${s.name}</h2>`;
+        for (const [name, fn] of s.tests) {
+          const row = document.createElement('div');
+          try { await fn(); row.className = 'case pass'; row.textContent = name; passed++; }
+          catch (e) {
+            row.className = 'case fail'; failed++;
+            row.textContent = name;
+            const err = document.createElement('div'); err.className = 'err'; err.textContent = e.message; row.appendChild(err);
+            failures.push(`${s.name} > ${name}: ${e.message}`);
+          }
+          box.appendChild(row);
+        }
+        results.appendChild(box);
+      }
+      resetStorage();
+      document.getElementById('summary').innerHTML =
+        `<div class="card"><strong>${passed}</strong>passed</div><div class="card"><strong>${failed}</strong>failed</div><div class="card"><strong>${passed + failed}</strong>total</div>`;
+      document.documentElement.dataset.testStatus = failed ? 'fail' : 'pass';
+      window.__testResults = { passed, failed, failures };
+      document.dispatchEvent(new CustomEvent('tests:done'));
+    }
+    document.getElementById('rerun').addEventListener('click', runAll);
+    window.addEventListener('load', () => setTimeout(runAll, 100));
+  </script>
+</body>
+</html>

@@ -330,10 +330,18 @@ function escapeHtml(text) {
 }
 
 // ─── Profile Memory Management ─────────────────────────────────
+let savingMemory = false;
 function saveCurrentMemory() {
+  // saveState() emits profile:changed, which calls back here; without the guard it recurses forever
+  if (savingMemory) return;
   const profileManager = window.ProfileManagerInstance;
   if (profileManager) {
-    profileManager.saveMemoryForActiveProfile(state.memory);
+    savingMemory = true;
+    try {
+      profileManager.saveMemoryForActiveProfile(state.memory);
+    } finally {
+      savingMemory = false;
+    }
   }
 }
 
