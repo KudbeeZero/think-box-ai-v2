@@ -27,6 +27,8 @@
         <li><a href="pipeline_dashboard.html">Pipeline</a></li>
         <li><a href="lifecycle_receipts.html">Lifecycle</a></li>
         <li><a href="demo.html">Demo</a></li>
+        <li><a href="demo-agent-tracking.html">Agent Tracking Demo</a></li>
+        <li><a href="tests/">Tests</a></li>
       </ul>
     </div>
   </nav>
@@ -48,6 +50,11 @@
     </div>
     <script src="load_perf.js"></script>
     <script src="control_plane_etag_store.js"></script>
+    <!-- Agent Tracking System -->
+    <script src="agent-registry.js"></script>
+    <script src="governance-window.js"></script>
+    <script src="taskbar-agents.js"></script>
+    <script src="agent-app.js"></script>
     <script>
       const AUTH = 'Bearer dev-only-local-token';
       const etagStore = TBControlPlaneEtag.getSharedEtagStore();

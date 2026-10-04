@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Tracking Tests</title>
+  <link rel="stylesheet" href="../../assets/css/design-system.css">
+  <link rel="stylesheet" href="../../assets/css/components.css">
+  <style>
+    body { padding: 20px; font-family: var(--font-base); }
+    .test-container { max-width: 1200px; margin: 0 auto; }
+    .test-section { margin-bottom: 30px; }
+    .test-header { font-size: 24px; font-weight: bold; margin-bottom: 15px; color: var(--color-text-primary); }
+    .test-result { padding: 10px; margin-bottom: 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px; }
+    .test-pass { background: var(--color-success); background: rgba(34, 197, 94, 0.1); color: var(--color-success); border: 1px solid var(--color-success); }
+    .test-fail { background: var(--color-danger); background: rgba(239, 68, 68, 0.1); color: var(--color-danger); border: 1px solid var(--color-danger); }
+    .console { background: var(--color-bg-elevated); border: 1px solid var(--color-border); padding: 15px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px; max-height: 400px; overflow-y: auto; color: var(--color-text-secondary); line-height: 1.4; }
+    .console-line { margin-bottom: 2px; }
+    .console-pass { color: var(--color-success); }
+    .console-fail { color: var(--color-danger); }
+    .console-info { color: var(--color-info); }
+    .nav { background: var(--color-bg-card); border-bottom: 1px solid var(--color-border); padding: 15px 0; margin-bottom: 30px; }
+    .nav-inner { display: flex; gap: 20px; align-items: center; }
+    .nav-link { text-decoration: none; color: var(--color-text-primary); padding: 8px 12px; border-radius: 4px; transition: background 0.2s; }
+    .nav-link:hover { background: var(--color-bg-elevated); }
+    .button { background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }
+    .button:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <h1 style="margin: 0; font-size: 20px;">Agent Tracking Tests</h1>
+      <a href="../index.html" class="nav-link">← Back to Control Plane</a>
+    </div>
+  </nav>
+
+  <div class="test-container">
+    <div class="test-section">
+      <div class="test-header">Test Suite</div>
+      <button class="button" onclick="runAllTests()">Run All Tests</button>
+      <button class="button" onclick="runRegistryTests()">Registry Tests</button>
+      <button class="button" onclick="runGovernanceTests()">Governance Tests</button>
+      <button class="button" onclick="clearConsole()">Clear Console</button>
+    </div>
+
+    <div class="test-section">
+      <div class="test-header">Console Output</div>
+      <div class="console" id="test-console">
+        <div class="console-line console-info">// Ready to run tests</div>
+        <div class="console-line console-info">// Click "Run All Tests" to start</div>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <div class="test-header">Results Summary</div>
+      <div id="test-summary" style="color: var(--color-text-secondary);">
+        <p>No tests run yet</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load modules -->
+  <script src="../agent-registry.js"></script>
+  <script src="../governance-window.js"></script>
+  <script src="test-agent-registry.js"></script>
+  <script src="test-governance-window.js"></script>
+
+  <script>
+    const console_ = {
+      log: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-info';
+        line.textContent = message;
+        document.getElementById('test-console').appendChild(line);
+        document.getElementById('test-console').scrollTop = document.getElementById('test-console').scrollHeight;
+      },
+      error: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-fail';
+        line.textContent = message;
+        document.getElementById('test-console').appendChild(line);
+        document.getElementById('test-console').scrollTop = document.getElementById('test-console').scrollHeight;
+      },
+      success: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-pass';
+        line.textContent = message;
+        document.getElementById('test-console').appendChild(line);
+        document.getElementById('test-console').scrollTop = document.getElementById('test-console').scrollHeight;
+      },
+    };
+
+    // Override global console for tests
+    const originalLog = window.console.log;
+    const originalError = window.console.error;
+    window.console.log = function(...args) {
+      console_.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+      originalLog.apply(window.console, args);
+    };
+    window.console.error = function(...args) {
+      console_.error(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+      originalError.apply(window.console, args);
+    };
+
+    function clearConsole() {
+      document.getElementById('test-console').innerHTML = '<div class="console-line console-info">// Console cleared</div>';
+    }
+
+    function runRegistryTests() {
+      clearConsole();
+      const tester = new TestAgentRegistry();
+      const success = tester.runAll();
+      updateSummary(tester, success);
+    }
+
+    function runGovernanceTests() {
+      clearConsole();
+      const tester = new TestGovernanceWindow();
+      const success = tester.runAll();
+      updateSummary(tester, success);
+    }
+
+    function runAllTests() {
+      clearConsole();
+      const registryTester = new TestAgentRegistry();
+      const governanceTester = new TestGovernanceWindow();
+
+      registryTester.runAll();
+      governanceTester.runAll();
+
+      const totalPassed = registryTester.passed + governanceTester.passed;
+      const totalFailed = registryTester.failed + governanceTester.failed;
+      const success = totalFailed === 0;
+
+      updateSummary({
+        passed: totalPassed,
+        failed: totalFailed,
+      }, success);
+    }
+
+    function updateSummary(tester, success) {
+      const summary = document.getElementById('test-summary');
+      const result = success ? '✓ All tests passed!' : '✗ Some tests failed';
+      const resultClass = success ? 'console-pass' : 'console-fail';
+      summary.innerHTML = `
+        <div style="margin-bottom: 10px;">
+          <span class="${resultClass}" style="font-weight: bold;">${result}</span>
+        </div>
+        <div>
+          <div class="test-result test-pass">
+            ✓ Passed: ${tester.passed}
+          </div>
+          <div class="test-result ${tester.failed > 0 ? 'test-fail' : 'test-pass'}">
+            ${tester.failed > 0 ? '✗' : '✓'} Failed: ${tester.failed}
+          </div>
+          <div class="test-result test-pass">
+            Total: ${tester.passed + tester.failed}
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

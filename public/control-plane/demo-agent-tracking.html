@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Tracking Demo</title>
+  <link rel="stylesheet" href="../assets/css/design-system.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <style>
+    body { padding: 20px; font-family: var(--font-base); }
+    .demo-container { max-width: 1400px; margin: 0 auto; }
+    .demo-header { font-size: 28px; font-weight: bold; margin-bottom: 10px; color: var(--color-text-primary); }
+    .demo-subtitle { color: var(--color-text-secondary); margin-bottom: 20px; }
+    .control-panel { background: var(--color-bg-card); border: 1px solid var(--color-border); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .control-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; }
+    .control-section { margin-bottom: 15px; }
+    .control-label { font-size: 12px; color: var(--color-text-tertiary); text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+    .input-field { width: 100%; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-family: var(--font-mono); font-size: 12px; }
+    .button { background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 8px; margin-bottom: 8px; }
+    .button:hover { opacity: 0.9; }
+    .button-secondary { background: var(--color-text-secondary); }
+    .button-success { background: var(--color-success); }
+    .button-warning { background: var(--color-warning); }
+    .button-danger { background: var(--color-danger); }
+    .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .status-board { background: var(--color-bg-elevated); border: 1px solid var(--color-border); padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+    .status-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .status-label { color: var(--color-text-secondary); }
+    .status-value { color: var(--color-text-primary); font-weight: 600; }
+    .nav { background: var(--color-bg-card); border-bottom: 1px solid var(--color-border); padding: 15px 0; margin-bottom: 30px; }
+    .nav-inner { display: flex; gap: 20px; align-items: center; }
+    .nav-link { text-decoration: none; color: var(--color-text-primary); padding: 8px 12px; border-radius: 4px; transition: background 0.2s; }
+    .nav-link:hover { background: var(--color-bg-elevated); }
+    .demo-section { margin-top: 20px; }
+    .console { background: var(--color-bg-elevated); border: 1px solid var(--color-border); padding: 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; max-height: 300px; overflow-y: auto; color: var(--color-text-secondary); line-height: 1.4; margin-top: 10px; }
+    .console-line { margin-bottom: 2px; }
+    .console-info { color: var(--color-info); }
+    .console-success { color: var(--color-success); }
+    .console-warning { color: var(--color-warning); }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <h1 style="margin: 0; font-size: 20px;">Agent Tracking Demo</h1>
+      <a href="index.html" class="nav-link">← Back to Control Plane</a>
+    </div>
+  </nav>
+
+  <div class="demo-container">
+    <div class="demo-header">Agent Tracking & Governance Demo</div>
+    <p class="demo-subtitle">Interactive demonstration of agent tracking, taskbar list, and approval workflow</p>
+
+    <div class="control-panel">
+      <div class="control-title">Demo Controls</div>
+
+      <div class="controls-grid">
+        <div>
+          <div class="control-section">
+            <div class="control-label">Agent ID</div>
+            <input type="text" id="agentId" class="input-field" value="agent-demo-1" placeholder="e.g., agent-1">
+          </div>
+          <div class="control-section">
+            <div class="control-label">Goal</div>
+            <input type="text" id="goal" class="input-field" value="Research Doginals price trends" placeholder="Research goal...">
+          </div>
+          <div class="control-section">
+            <div class="control-label">Steps Completed</div>
+            <input type="number" id="steps" class="input-field" value="0" min="0">
+          </div>
+          <div class="control-section">
+            <div class="control-label">Tokens Used</div>
+            <input type="number" id="tokens" class="input-field" value="0" min="0">
+          </div>
+        </div>
+
+        <div>
+          <div class="control-section">
+            <div class="control-label">Agent Status</div>
+            <select id="status" class="input-field">
+              <option value="running">running</option>
+              <option value="awaiting_approval">awaiting_approval</option>
+              <option value="completed">completed</option>
+              <option value="failed">failed</option>
+              <option value="idle">idle</option>
+            </select>
+          </div>
+          <div class="control-section">
+            <div class="control-label">Think Box ID</div>
+            <input type="text" id="thinkBoxId" class="input-field" value="box-demo-1" placeholder="e.g., box-1">
+          </div>
+          <div class="control-section">
+            <div class="control-label">Approval Reason (for approval_request)</div>
+            <input type="text" id="approvalReason" class="input-field" value="Safety check required" placeholder="Reason...">
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 15px; border-top: 1px solid var(--color-border); padding-top: 15px;">
+        <div class="control-label" style="margin-bottom: 10px;">Send WebSocket Messages</div>
+        <div>
+          <button class="button button-success" onclick="mockRunUpdate()">Send run_update</button>
+          <button class="button button-warning" onclick="mockApprovalRequest()">Send approval_request</button>
+          <button class="button" onclick="mockSpecialistResult()">Send specialist_result</button>
+          <button class="button" onclick="mockThinkTokenCube()">Send think_token_cube</button>
+        </div>
+        <div style="margin-top: 10px;">
+          <button class="button button-secondary" onclick="clearDemo()">Clear Demo</button>
+          <button class="button button-secondary" onclick="demoScenario()">Run Full Scenario</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Status Board</div>
+      <div class="status-board">
+        <div class="status-item">
+          <span class="status-label">Total Agents:</span>
+          <span class="status-value" id="totalAgents">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Running:</span>
+          <span class="status-value" id="runningAgents">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Awaiting Approval:</span>
+          <span class="status-value" id="awaitingApproval">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Open Windows:</span>
+          <span class="status-value" id="openWindows">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Last Event:</span>
+          <span class="status-value" id="lastEvent">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Agents List</div>
+      <div id="agentsList" style="background: var(--color-bg-elevated); border: 1px solid var(--color-border); padding: 15px; border-radius: 6px; min-height: 100px;">
+        <p style="color: var(--color-text-tertiary);">No agents yet. Send a message to create agents.</p>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Console</div>
+      <div class="console" id="demo-console">
+        <div class="console-line console-info">// Demo ready. Send messages to populate agents.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load modules -->
+  <script src="agent-registry.js"></script>
+  <script src="governance-window.js"></script>
+  <script src="taskbar-agents.js"></script>
+  <script src="agent-app.js"></script>
+
+  <script>
+    // Override console logging to show in demo
+    const demoConsole = {
+      log: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-info';
+        line.textContent = `> ${message}`;
+        document.getElementById('demo-console').appendChild(line);
+        document.getElementById('demo-console').scrollTop = document.getElementById('demo-console').scrollHeight;
+      },
+      success: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-success';
+        line.textContent = `✓ ${message}`;
+        document.getElementById('demo-console').appendChild(line);
+        document.getElementById('demo-console').scrollTop = document.getElementById('demo-console').scrollHeight;
+      },
+      warning: function(message) {
+        const line = document.createElement('div');
+        line.className = 'console-line console-warning';
+        line.textContent = `⚠ ${message}`;
+        document.getElementById('demo-console').appendChild(line);
+        document.getElementById('demo-console').scrollTop = document.getElementById('demo-console').scrollHeight;
+      },
+    };
+
+    const registry = window.AgentRegistry;
+    const govWindow = window.GovernanceWindowInstance;
+
+    // Setup listeners
+    registry.on('agents:changed', () => updateStatus());
+    registry.on('agent:created', (agent) => {
+      demoConsole.success(`Agent created: ${agent.id.substring(0, 12)}`);
+      updateStatus();
+    });
+    registry.on('agent:updated', (agent) => {
+      demoConsole.log(`Agent updated: ${agent.id.substring(0, 12)}`);
+      updateStatus();
+    });
+    registry.on('agent:approval_requested', (data) => {
+      demoConsole.warning(`Approval requested for ${data.agent.id.substring(0, 12)}`);
+      updateStatus();
+    });
+
+    function getInputValues() {
+      return {
+        agentId: document.getElementById('agentId').value || 'agent-demo-1',
+        goal: document.getElementById('goal').value || 'Unknown goal',
+        status: document.getElementById('status').value || 'running',
+        steps: parseInt(document.getElementById('steps').value) || 0,
+        tokens: parseInt(document.getElementById('tokens').value) || 0,
+        thinkBoxId: document.getElementById('thinkBoxId').value || 'box-1',
+        approvalReason: document.getElementById('approvalReason').value || 'Approval required',
+      };
+    }
+
+    function mockRunUpdate() {
+      const vals = getInputValues();
+      registry.handleWebSocketMessage({
+        type: 'run_update',
+        data: {
+          agent_id: vals.agentId,
+          status: vals.status,
+          goal: vals.goal,
+          steps_completed: vals.steps,
+          tokens_used: vals.tokens,
+          think_box_id: vals.thinkBoxId,
+        },
+      });
+      demoConsole.success(`run_update: ${vals.agentId.substring(0, 12)} → ${vals.status}`);
+      updateStatus();
+    }
+
+    function mockApprovalRequest() {
+      const vals = getInputValues();
+      registry.handleWebSocketMessage({
+        type: 'approval_request',
+        data: {
+          agent_id: vals.agentId,
+          reason: vals.approvalReason,
+          context: { details: 'Demo approval request' },
+        },
+      });
+      demoConsole.warning(`approval_request: ${vals.agentId.substring(0, 12)} - ${vals.approvalReason}`);
+      updateStatus();
+    }
+
+    function mockSpecialistResult() {
+      const vals = getInputValues();
+      registry.handleWebSocketMessage({
+        type: 'specialist_result',
+        data: {
+          agent_id: vals.agentId,
+          tokens_used: 25,
+        },
+      });
+      demoConsole.log(`specialist_result: +1 step, +25 tokens`);
+      updateStatus();
+    }
+
+    function mockThinkTokenCube() {
+      const vals = getInputValues();
+      registry.handleWebSocketMessage({
+        type: 'think_token_cube',
+        data: {
+          agent_id: vals.agentId,
+          tokens: vals.tokens,
+        },
+      });
+      demoConsole.log(`think_token_cube: ${vals.tokens} tokens`);
+      updateStatus();
+    }
+
+    function updateStatus() {
+      const agents = registry.getAgents();
+      const running = agents.filter(a => a.status === 'running').length;
+      const awaiting = agents.filter(a => a.status === 'awaiting_approval').length;
+      const windows = govWindow.getOpenWindows().length;
+
+      document.getElementById('totalAgents').textContent = agents.length;
+      document.getElementById('runningAgents').textContent = running;
+      document.getElementById('awaitingApproval').textContent = awaiting;
+      document.getElementById('openWindows').textContent = windows;
+      document.getElementById('lastEvent').textContent = new Date().toLocaleTimeString();
+
+      // Update agents list
+      const listHTML = agents.map(a => `
+        <div style="padding: 8px; background: var(--color-bg-card); margin-bottom: 8px; border-radius: 4px; border-left: 3px solid var(--color-${a.status === 'running' ? 'success' : a.status === 'awaiting_approval' ? 'warning' : 'text-tertiary'});">
+          <div style="font-weight: 600; margin-bottom: 4px;">${a.id}</div>
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px;">${a.goal}</div>
+          <div style="font-size: 11px; color: var(--color-text-tertiary);">
+            Status: <strong>${a.status}</strong> | Steps: ${a.stepsCompleted} | Tokens: ${a.tokensUsed}
+            ${a.approvalPending.length > 0 ? ` | ⚠️ ${a.approvalPending.length} approval(s)` : ''}
+          </div>
+          <div style="margin-top: 8px;">
+            <button class="button" style="font-size: 11px; padding: 4px 8px;" onclick="demoOpenAgent('${a.id}')">Open Window</button>
+            <button class="button button-secondary" style="font-size: 11px; padding: 4px 8px;" onclick="demoCompleteAgent('${a.id}')">Complete</button>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('agentsList').innerHTML = listHTML || '<p style="color: var(--color-text-tertiary);">No agents yet.</p>';
+    }
+
+    function demoOpenAgent(agentId) {
+      const agent = registry.getAgent(agentId);
+      if (agent) {
+        govWindow.openWindow(agentId, agent);
+        demoConsole.log(`Opened governance window for ${agentId.substring(0, 12)}`);
+      }
+    }
+
+    function demoCompleteAgent(agentId) {
+      registry.completeAgent(agentId);
+      demoConsole.success(`Agent completed: ${agentId.substring(0, 12)}`);
+      updateStatus();
+    }
+
+    function clearDemo() {
+      registry.clear();
+      govWindow.closeAllWindows();
+      document.getElementById('demo-console').innerHTML = '<div class="console-line console-info">// Demo cleared</div>';
+      demoConsole.log('Demo cleared');
+      updateStatus();
+    }
+
+    async function demoScenario() {
+      clearDemo();
+      demoConsole.log('Running full scenario...');
+
+      // Create first agent
+      document.getElementById('agentId').value = 'agent-scenario-1';
+      document.getElementById('goal').value = 'Verify Doginals on blockchain';
+      document.getElementById('status').value = 'running';
+      document.getElementById('steps').value = '0';
+      document.getElementById('tokens').value = '0';
+      mockRunUpdate();
+
+      await new Promise(r => setTimeout(r, 500));
+
+      // Progress first agent
+      document.getElementById('steps').value = '3';
+      document.getElementById('tokens').value = '75';
+      mockRunUpdate();
+
+      await new Promise(r => setTimeout(r, 500));
+
+      // Create second agent
+      document.getElementById('agentId').value = 'agent-scenario-2';
+      document.getElementById('goal').value = 'Analyze DRC-20 token supply';
+      mockRunUpdate();
+
+      await new Promise(r => setTimeout(r, 500));
+
+      // Request approval for second agent
+      document.getElementById('approvalReason').value = 'Requires market data access approval';
+      mockApprovalRequest();
+
+      await new Promise(r => setTimeout(r, 500));
+
+      // Complete first agent
+      document.getElementById('agentId').value = 'agent-scenario-1';
+      document.getElementById('status').value = 'completed';
+      mockRunUpdate();
+
+      demoConsole.success('Scenario complete! Open windows to test approval workflow.');
+      updateStatus();
+    }
+
+    // Initial update
+    updateStatus();
+  </script>
+</body>
+</html>
