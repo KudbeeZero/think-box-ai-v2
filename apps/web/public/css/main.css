@@ -830,7 +830,7 @@ body {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md, 0 10px 30px rgba(0, 0, 0, 0.5));
   min-width: 240px;
   max-width: 320px;
   max-height: 400px;
@@ -923,7 +923,7 @@ body {
 .workflow-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.7));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -949,7 +949,7 @@ body {
   max-height: 70vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.8));
 }
 
 .modal-header {
@@ -1086,7 +1086,7 @@ body {
   max-height: 400px;
   overflow-y: auto;
   z-index: 1000;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.4));
 }
 
 .profile-dropdown.hidden {
@@ -1140,7 +1140,7 @@ body {
 }
 
 .profile-select-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
 }
 
 .profile-item-actions {
@@ -1160,7 +1160,7 @@ body {
 }
 
 .profile-item-action:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
   color: var(--text-primary);
 }
 
@@ -1200,7 +1200,7 @@ body {
   padding: 16px;
   margin: 12px;
   max-width: 400px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm, 0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 .sharing-panel.hidden {

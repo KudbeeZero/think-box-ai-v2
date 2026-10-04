@@ -4,7 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>kudbEE — Agent OS</title>
+  <meta name="theme-color" content="#12121a">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash (see js/theme-switcher.js)
+    (function () {
+      try {
+        var pref = JSON.parse(localStorage.getItem('kudbee:theme') || '"system"');
+        var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.themePref = pref;
+      } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+    })();
+  </script>
   <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/polish.css">
 </head>
 <body>
   <div id="app">
@@ -229,5 +242,11 @@
   <script src="/js/app.js"></script>
   <script src="/js/workflow-builder.js"></script>
   <script src="/js/actions-button.js"></script>
+  <script src="/js/ui-utils.js"></script>
+  <script src="/js/shortcuts.js"></script>
+  <script src="/js/notification-center.js"></script>
+  <script src="/js/theme-switcher.js"></script>
+  <script src="/js/command-palette.js"></script>
+  <script src="/js/shortcuts-reference.js"></script>
 </body>
 </html>
