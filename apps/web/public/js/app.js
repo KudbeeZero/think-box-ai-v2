@@ -365,6 +365,12 @@ function addRunToActiveProfile(runId) {
   }
 }
 
+// ─── Workflow Management ───────────────────────────────────────
+function handleWorkflowSaved(event) {
+  const { workflow } = event.detail;
+  appendTerminalMessage('system', `✓ Workflow saved: ${workflow.name} (${workflow.steps.length} steps)`);
+}
+
 // ─── Event Listeners ───────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
@@ -377,6 +383,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('profile:changed', () => {
     saveCurrentMemory();
   });
+
+  // Workflow event listeners
+  document.addEventListener('workflow-saved', handleWorkflowSaved);
 
   document.getElementById('run-goal').addEventListener('click', runGoal);
   document.getElementById('stop-goal').addEventListener('click', stopGoal);

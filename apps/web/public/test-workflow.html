@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workflow Builder Tests</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      color: var(--text-primary);
+    }
+    .test-section {
+      margin-bottom: 30px;
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      border-radius: 6px;
+      background: var(--bg-panel);
+    }
+    .test-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: var(--accent);
+    }
+    .test-result {
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+      border-left: 3px solid;
+    }
+    .test-pass {
+      background: rgba(16, 185, 129, 0.1);
+      border-left-color: var(--success);
+      color: var(--success);
+    }
+    .test-fail {
+      background: rgba(239, 68, 68, 0.1);
+      border-left-color: var(--error);
+      color: var(--error);
+    }
+    .test-info {
+      background: rgba(59, 130, 246, 0.1);
+      border-left-color: var(--info);
+      color: var(--info);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 16px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: var(--accent-light);
+    }
+  </style>
+</head>
+<body style="background: var(--bg-primary);">
+  <div class="test-container">
+    <h1>Workflow Builder & Actions Button Tests</h1>
+
+    <div class="controls">
+      <button onclick="runAllTests()">Run All Tests</button>
+      <button onclick="clearResults()">Clear Results</button>
+      <button onclick="clearLocalStorage()">Clear Storage</button>
+    </div>
+
+    <div class="test-section">
+      <div class="test-title">Test Results</div>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <!-- Load the workflow builder module -->
+  <script src="/js/workflow-builder.js"></script>
+  <script src="/js/actions-button.js"></script>
+
+  <script>
+    const results = document.getElementById('results');
+
+    function addResult(name, passed, message) {
+      const div = document.createElement('div');
+      div.className = `test-result ${passed ? 'test-pass' : 'test-fail'}`;
+      div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+      results.appendChild(div);
+    }
+
+    function log(message) {
+      const div = document.createElement('div');
+      div.className = 'test-result test-info';
+      div.textContent = `ℹ ${message}`;
+      results.appendChild(div);
+    }
+
+    function clearResults() {
+      results.innerHTML = '';
+    }
+
+    function clearLocalStorage() {
+      localStorage.clear();
+      log('Local storage cleared');
+    }
+
+    async function runAllTests() {
+      clearResults();
+      log('Starting tests...');
+
+      // Test 1: Workflow creation
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const workflow = builder.currentWorkflow;
+        addResult('Workflow Creation', workflow && workflow.id, 'Workflow created with ID');
+      } catch (e) {
+        addResult('Workflow Creation', false, e.message);
+      }
+
+      // Test 2: Add step
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const stepId = builder.addStep('test_tool', '{"arg": "value"}');
+        addResult('Add Step', stepId && builder.currentWorkflow.steps.length === 1, 'Step added to workflow');
+      } catch (e) {
+        addResult('Add Step', false, e.message);
+      }
+
+      // Test 3: Update step
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        builder.updateStep(builder.currentWorkflow.steps[0].id, { tool: 'updated_tool' });
+        const step = builder.currentWorkflow.steps[0];
+        addResult('Update Step', step.tool === 'updated_tool', 'Step updated successfully');
+      } catch (e) {
+        addResult('Update Step', false, e.message);
+      }
+
+      // Test 4: Remove step
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const stepId = builder.currentWorkflow.steps[0].id;
+        builder.removeStep(stepId);
+        addResult('Remove Step', builder.currentWorkflow.steps.length === 0, 'Step removed from workflow');
+      } catch (e) {
+        addResult('Remove Step', false, e.message);
+      }
+
+      // Test 5: Save workflow
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        builder.currentWorkflow.name = 'Test Workflow';
+        builder.currentWorkflow.steps.push({
+          id: 'step-1',
+          tool: 'shell_exec',
+          args: 'echo "hello"',
+          enabled: true,
+        });
+        builder.saveWorkflow();
+        const saved = localStorage.getItem(`kudbee:workflows:${builder.currentWorkflow.id}`);
+        addResult('Save Workflow', !!saved, 'Workflow saved to localStorage');
+      } catch (e) {
+        addResult('Save Workflow', false, e.message);
+      }
+
+      // Test 6: Get all workflows
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const workflows = builder.getAllWorkflows();
+        addResult('Get Workflows', workflows.length > 0, `Retrieved ${workflows.length} workflow(s)`);
+      } catch (e) {
+        addResult('Get Workflows', false, e.message);
+      }
+
+      // Test 7: Load workflow
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const workflows = builder.getAllWorkflows();
+        if (workflows.length > 0) {
+          const loaded = builder.loadWorkflow(workflows[0].id);
+          addResult('Load Workflow', loaded, 'Workflow loaded from storage');
+        } else {
+          addResult('Load Workflow', false, 'No workflows to load');
+        }
+      } catch (e) {
+        addResult('Load Workflow', false, e.message);
+      }
+
+      // Test 8: Workflow-saved event
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        let eventFired = false;
+        document.addEventListener('workflow-saved', () => {
+          eventFired = true;
+        });
+
+        builder.currentWorkflow.name = 'Event Test Workflow';
+        builder.saveWorkflow();
+
+        setTimeout(() => {
+          addResult('Workflow-Saved Event', eventFired, 'Event dispatched on save');
+        }, 100);
+      } catch (e) {
+        addResult('Workflow-Saved Event', false, e.message);
+      }
+
+      // Test 9: Actions button exists
+      try {
+        const btn = document.getElementById('actions-button');
+        addResult('Actions Button', !!btn, 'Actions button found in DOM');
+      } catch (e) {
+        addResult('Actions Button', false, e.message);
+      }
+
+      // Test 10: Workflow string generation
+      try {
+        const builder = window.WorkflowBuilderInstance;
+        const workflows = builder.getAllWorkflows();
+        if (workflows.length > 0) {
+          builder.currentWorkflow = workflows[0];
+          const str = builder.getWorkflowsAsString();
+          addResult('Workflow String', str.includes('Workflow:'), 'Workflow converted to string');
+        } else {
+          addResult('Workflow String', false, 'No workflows available');
+        }
+      } catch (e) {
+        addResult('Workflow String', false, e.message);
+      }
+
+      log('Tests complete!');
+    }
+  </script>
+</body>
+</html>
