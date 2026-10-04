@@ -9,9 +9,14 @@ const state = {
   plugins: [],
   tasks: [],
   thoughts: [],
+  runs: [],
   config: {
     model: 'deepseek-coder:6.7b',
     provider: 'ollama',
+  },
+  memory: {
+    org: {},
+    verified: {}
   }
 };
 
@@ -324,6 +329,42 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ─── Profile Memory Management ─────────────────────────────────
+function saveCurrentMemory() {
+  const profileManager = window.ProfileManagerInstance;
+  if (profileManager) {
+    profileManager.saveMemoryForActiveProfile(state.memory);
+  }
+}
+
+function loadProfileMemory() {
+  const profileManager = window.ProfileManagerInstance;
+  if (profileManager) {
+    const memory = profileManager.loadMemoryForActiveProfile();
+    state.memory = memory.org || {} ? { org: memory.org || {}, verified: memory.verified || {} } : { org: {}, verified: {} };
+  }
+}
+
+function handleProfileSwitched(event) {
+  const profile = event.detail.profile;
+  appendTerminalMessage('system', `📋 Switched to profile: ${profile.name}`);
+
+  saveCurrentMemory();
+  loadProfileMemory();
+
+  state.tasks = [];
+  state.thoughts = [];
+  renderTasks();
+  renderThoughts();
+}
+
+function addRunToActiveProfile(runId) {
+  const profileManager = window.ProfileManagerInstance;
+  if (profileManager && runId) {
+    profileManager.addRunToActiveProfile(runId);
+  }
+}
+
 // ─── Workflow Management ───────────────────────────────────────
 function handleWorkflowSaved(event) {
   const { workflow } = event.detail;
@@ -333,6 +374,15 @@ function handleWorkflowSaved(event) {
 // ─── Event Listeners ───────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
+
+  // Load initial profile memory
+  loadProfileMemory();
+
+  // Profile event listeners
+  document.addEventListener('profile:switched', handleProfileSwitched);
+  document.addEventListener('profile:changed', () => {
+    saveCurrentMemory();
+  });
 
   // Workflow event listeners
   document.addEventListener('workflow-saved', handleWorkflowSaved);
@@ -352,4 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load models periodically
   setInterval(loadModels, 10000);
   setTimeout(loadModels, 1000);
+
+  // Auto-save memory periodically
+  setInterval(saveCurrentMemory, 5000);
+
+  // Save memory on page unload
+  window.addEventListener('beforeunload', saveCurrentMemory);
 });
