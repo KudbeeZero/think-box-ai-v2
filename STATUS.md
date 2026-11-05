@@ -1,3 +1,20 @@
+## PR #7 — Thin gated live adapter + dry-run for the Think Token trial (MERGED)
+
+**Date:** 2026-11-05
+**Task:** ASKED — prepare the thin live adapter for the Think Token trial. Do not execute any live model calls.
+**Outcome:** DONE — adapter built, gated, dry-run wired, hermetic tests added. **No live calls were made.**
+
+- **Adapter:** `thinkbox/live_adapter.py` — `ThinkTokenLiveAdapter.complete(prompt)` wrapping the existing OpenAI-compatible POST path to `{base_url}/chat/completions`. Matches the harness provider interface.
+- **Gate:** `THINKBOX_LIVE_TRIAL_ACK=1` (default off; accepts `1`/`yes`/`true` only). Refuses with exit 2 and an explicit `LiveTrialNotAuthorizedError` when absent. The flag is a local toggle, **not** authorization — the governance token and founder approval in `docs/evidence/think_token_live_plan.md` §9 remain required before any live call.
+- **Dry-run:** `python3 -m thinkbox.think_token_eval --dry-run` replays every prompt the live trial would send (5 goals × 2 arms) through the adapter in dry-run mode, printing each request payload and the expected hermetic statistics. No socket is opened; the flag is not required.
+- **Standalone dry-run:** `python3 -m thinkbox.live_adapter --dry-run "<prompt>"` prints one payload.
+- **Tests:** `tests/unit/test_live_adapter.py` — **10 tests** (gate values, dry-run hermeticity, honest failure without an API key). Combined with the harness suite: **37 tests** in `tests.unit.test_live_adapter` + `tests.unit.test_think_token_eval`.
+- **Docs:** `docs/evidence/think_token_live_plan.md` §4.1 documents the adapter and dry-run commands; `docs/evidence/think_token_learning.md` Commands section updated.
+- **Honesty:** the live trial is **NOT AUTHORIZED**. `docs/evidence/think_token_live_plan.md` now carries 4 `NOT AUTHORIZED` occurrences. No live Mercury calls were made; no network access in tests.
+- **Merge note:** PR #6 had landed on main with the same three files this branch extended; resolved by keeping our versions (strict superset) and merging `origin/main` first. PR #7 merged `CLEAN`/`MERGEABLE` with no review requests.
+
+---
+
 ## PR #126 — Think Token learning-benefit evidence (hermetic)
 
 **Date:** 2026-11-05
@@ -18,8 +35,8 @@ improvement on held-out goals (same task family, different instances).
   p = 1.0 — proves the verifier detects behavioral change, not context text.
 - **Evidence:** `docs/evidence/think_token_learning.md`,
   `data/thinkboxmd/artifacts/think_token_learning.json`.
-- **Tests:** `tests/unit/test_think_token_eval.py` — **27 tests** (incl. anti-claim guard suite).
-- **Full suite:** `python3 -m unittest discover tests/` → **2701 OK**, 8 skipped, 3 expected failures.
+- **Tests:** `tests/unit/test_think_token_eval.py` — **27 tests** (incl. anti-claim guard suite); plus **10 tests** in `tests/unit/test_live_adapter.py` for the gated adapter.
+- **Full suite:** `python3 -m unittest discover tests/` → **2637 tests** (same 15 pre-existing errors as baseline — `fastapi` not installed + 2 in `test_run_governed` — plus 8 skipped, 3 expected failures).
 - **Reproducible from clean checkout:** `python3 -m unittest tests.unit.test_think_token_eval` and `python3 -m pytest tests/unit/test_think_token_eval.py` both pass on a fresh copy of the tree.
 - **Honesty:** the provider is scripted, not a real model. This proves the
   injection mechanism reaches the artifact path and the verifier is sensitive;
