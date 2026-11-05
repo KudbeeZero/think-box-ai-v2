@@ -47,16 +47,21 @@ class CNCManufacturingEngine:
         if not validation.is_valid:
             return {"status": "failed", "errors": validation.errors}
 
+        # Fail-closed: a job with no APPROVED gate is never executed.
         gate = self._safety_store.get_gate_by_job_id(job.job_id)
         if gate is None:
             return {"status": "blocked", "reason": "Safety gate not found"}
-        if gate.status.value != "APPROVED":
-            return {"status": "blocked", "reason": "Safety gate not approved"}
+        if not self._safety_store.is_job_approved(job.job_id):
+            return {"status": "blocked",
+                    "reason": f"Safety gate status is {gate.status.value}; execution requires APPROVED"}
 
         records = []
         for op in job.operations:
-            records.append({"operation_id": op.operation_id, "status": "completed", "start_time": datetime.now(timezone.utc).isoformat()})
+            records.append({"operation_id": op.operation_id, "status": "completed",
+                            "start_time": datetime.now(timezone.utc).isoformat()})
 
+        job.status = "completed"
+        job.updated_at = datetime.now(timezone.utc).isoformat()
         self._jobs.append(job.model_dump())
 
         return {"status": "completed", "execution_records": records}
