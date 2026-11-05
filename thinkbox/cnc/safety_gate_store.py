@@ -55,7 +55,28 @@ class SafetyGateStore:
         return None
 
     def get_gate_by_job_id(self, job_id: str) -> ApprovalGate | None:
+        """Most recent gate for job_id. Last write wins."""
+        match: ApprovalGate | None = None
         for g in self._gates:
             if g.job_id == job_id:
-                return g
-        return None
+                match = g
+        return match
+
+    def is_job_approved(self, job_id: str) -> bool:
+        """True only when the most recent gate for job_id is APPROVED.
+
+        PENDING, REJECTED, EMERGENCY_STOP and missing gates all block
+        execution (fail-closed).
+        """
+        gate = self.get_gate_by_job_id(job_id)
+        if gate is None:
+            return False
+        return gate.status == ApprovalStatus.APPROVED
+
+    def reject(self, job_id: str, approver_id: str, reason: str = "") -> ApprovalGate:
+        """Record a REJECTED gate. The engine blocks on this too."""
+        gate = ApprovalGate(job_id=job_id, approver_id=approver_id, reason=reason,
+                            status=ApprovalStatus.REJECTED)
+        self._gates.append(gate)
+        self._save(gate)
+        return gate
